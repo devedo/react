@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MySimpMessagingTemplate {
 	private final SimpMessagingTemplate messagingTemplate;
-	private final String topic = "/topic/progess";
+	private final String topic = "/topic/progress";
 	private final String topicStatus = "/topic/status";
 
 	public void progress(final NotificationProgress payload) {

@@ -26,16 +26,14 @@ public class Task implements Runnable {
 	public void run() {
 		try {
 			final int cienPorciento = 100;
-			for (int i = 1; (i <= cienPorciento && !Thread.currentThread().isInterrupted()); i++) {
-				final long l = BigDecimal.valueOf(Math.random()).setScale(4, RoundingMode.HALF_UP)
-						.multiply(BigDecimal.valueOf(100 * (10 * (i % 2)))).longValue();
-				TimeUnit.MILLISECONDS.sleep(l);
-				this.getProgressTaskListener().accept(this, this.getPorcentage(i, cienPorciento));
-			}
-			if (Thread.currentThread().isInterrupted()) {
-				log.info("Task {} interrupted", this.name);
-				this.messagingTemplate.progress(NotificationProgress.builder().name(this.name)
-						.type(NotificationProgress.NotificationType.IN_PROGRESS).build());
+			if (!Thread.currentThread().isInterrupted()) {
+				for (int i = 1; (i <= cienPorciento && !Thread.currentThread().isInterrupted()); i++) {
+					final long l = BigDecimal.valueOf(Math.random()).setScale(4, RoundingMode.HALF_UP)
+							.multiply(BigDecimal.valueOf(100 * (10 * (i % 2)))).longValue();
+					TimeUnit.MILLISECONDS.sleep(l);
+					this.getProgressTaskListener().accept(this, this.getPorcentage(i, cienPorciento));
+				}
+
 			} else {
 				log.info("Task {} completed", this.name);
 			}

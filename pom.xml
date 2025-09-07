@@ -44,8 +44,7 @@
             <artifactId>stomp-websocket</artifactId>
             <version>2.3.4</version>
         </dependency>
-        Mapped to org.springframework.web.socket.sockjs.support.SockJsHttpRequestHandler@708eb310
-        Processing transport request: GET http://localhost:8081/ws
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>

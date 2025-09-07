@@ -13,11 +13,9 @@ public class CorsConfig implements WebMvcConfigurer {
 		System.out.println("CORS Config Initialized");
 	}
 	@Override
-	public void addCorsMappings(CorsRegistry registry) {
+	public void addCorsMappings(final CorsRegistry registry) {
 		registry.addMapping("/**").allowedOrigins("http://localhost:8080") // ✅ Origen permitido
 				.allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS").allowedHeaders("*").allowCredentials(true); // Si
 
-		// Puedes agregar más rutas si necesitas
-		// registry.addMapping("/api/**")...
 	}
 }

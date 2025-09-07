@@ -13,12 +13,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+@SuppressWarnings("SuspiciousMethodCalls")
 @Slf4j
 @Getter
 @Setter
 public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 
 	private Consumer<Task> cancelledTaskListener;
+	private Consumer<Task> doneTaskListener;
 	private BiConsumer<Task, Double> progressTaskListener;
 	private final List<Task> tasks = new ArrayList<>();
 
@@ -33,6 +35,8 @@ public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 		this.tasks.stream().filter(entry -> entry.getFuture().equals(r)).findAny().ifPresent(entry -> {
 			if (((FutureTask) r).isCancelled())
 				this.getCancelledTaskListener().accept(entry);
+			else if (((FutureTask) r).isDone())
+				this.doneTaskListener.accept(entry);
 			this.tasks.remove(entry);
 		});
 
@@ -44,8 +48,11 @@ public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 	}
 
 	public void remove(final String name) {
-		final Task task = this.tasks.stream().filter(task1 -> task1.getName().equals(name)).findAny().orElseThrow();
-		task.getFuture().cancel(true);
+		this.tasks.stream().filter(task1 -> task1.getName().equals(name)).findAny().ifPresent(task -> {
+			task.getFuture().cancel(true);
+			this.cancelledTaskListener.accept(task);
+			this.getQueue().remove(task.getFuture());
+		});
 	}
 	public PoolDetails details() {
 		return PoolDetails.builder().corePoolSize(this.getCorePoolSize()) // número de hilos básicos (core threads) que
