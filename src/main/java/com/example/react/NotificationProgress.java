@@ -11,11 +11,10 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public class NotificationProgress extends PoolDetails {
 	protected String name;
-	protected String describtion;
 	protected NotificationType type;
 	protected Double progress;
 
 	public enum NotificationType {
-		INTERRUPTED, IN_PROGRESS, COMPLETED, CANCELED, FAILED
+		INTERRUPTED, IN_PROGRESS, COMPLETED, CANCELED, FAILED, REJECTED
 	}
 }

@@ -9,14 +9,17 @@ import org.springframework.stereotype.Service;
 @Data
 @RequiredArgsConstructor
 public class MySimpMessagingTemplate {
+	private Runnable statusPoolHandler;
 	private final SimpMessagingTemplate messagingTemplate;
-	private final String topic = "/topic/progress";
+	private final String topicProgress = "/topic/progress";
 	private final String topicStatus = "/topic/status";
 
 	public void progress(final NotificationProgress payload) {
-		this.messagingTemplate.convertAndSend(this.topic, payload);
+		this.messagingTemplate.convertAndSend(this.topicProgress, payload);
+		this.statusPoolHandler.run();
 	}
 	public void status(final PoolDetails payload) {
 		this.messagingTemplate.convertAndSend(this.topicStatus, payload);
 	}
+
 }

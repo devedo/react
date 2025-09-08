@@ -20,8 +20,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 	@Override
 	public void configureMessageBroker(final MessageBrokerRegistry registry) {
 		registry.setApplicationDestinationPrefixes("/app");
-		registry.enableSimpleBroker("/topic", "/queue").setHeartbeatValue(new long[]{5000, 5000})
-				.setTaskScheduler(this.webSocketMessageBrokerTaskScheduler());
+		registry.enableSimpleBroker("/topic", "/queue").setTaskScheduler(this.webSocketMessageBrokerTaskScheduler());
 	}
 	@Bean
 	public ThreadPoolTaskScheduler webSocketMessageBrokerTaskScheduler() {
