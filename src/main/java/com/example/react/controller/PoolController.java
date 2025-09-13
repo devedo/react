@@ -1,8 +1,6 @@
 package com.example.react.controller;
 
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -15,8 +13,8 @@ import com.example.react.PoolDetails;
 import com.example.react.Task;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,24 +25,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/standardPool")
 @RestController()
-public class PoolController implements InitializingBean {
+public class PoolController {
 	private final MySimpMessagingTemplate messagingTemplate;
 
-	private final PoolDetails poolDetails = PoolDetails.builder().corePoolSize(1).maximumPoolSize(2).keepAliveTime(0)
-			.workQueue(1).build();
+	private MyThreadPoolExecutor pool;
+	private PoolDetails poolDetails;
+	private boolean start;
 
-	private MyThreadPoolExecutor pool = new MyThreadPoolExecutor(this.poolDetails.getCorePoolSize(),
-			this.poolDetails.getMaximumPoolSize(), this.poolDetails.getKeepAliveTime(), TimeUnit.SECONDS,
-			new ArrayBlockingQueue<>(this.poolDetails.getWorkQueue()));
-
-	@Override
 	public void afterPropertiesSet() {
-		this.messagingTemplate.setStatusPoolHandler(this.getStatusPoolHandler());
 		this.pool.setProgressTaskHandler(this.getProgressTaskHandler());
 		this.pool.setCancelledTaskHandler(this.getCancelledTaskHandler());
 		this.pool.setDoneTaskHandler(this.getDoneTaskHandler());
-		this.pool.setRejectedExecutionHandler(this.getRejectedExecutionHandler());
-		this.pool.setStatusPoolHandler(this.getStatusPoolHandler());
+		this.pool.setOtherRejectedTaskHandler(this.getRejectedExecutionHandler());
 	}
 
 	// Threads
@@ -68,7 +60,7 @@ public class PoolController implements InitializingBean {
 	@GetMapping("/pool/details")
 	public ResponseEntity<PoolDetails> standardPoolDetails() {
 		log.info("details standardPoolDetails");
-		return ResponseEntity.ok(this.pool.details());
+		return ResponseEntity.ok(this.pool == null ? PoolDetails.builder().build() : this.pool.details());
 	}
 	@GetMapping("/pool/shutDown")
 	public ResponseEntity<Void> standardPoolShutDown() {
@@ -80,24 +72,24 @@ public class PoolController implements InitializingBean {
 	public ResponseEntity<Void> standardPoolShutDownNow() {
 		log.info("shutDown standardPoolShutDownNow");
 		this.pool.shutdownNow();
+
 		return ResponseEntity.noContent().build();
 	}
 	@PostMapping("/pool/change")
 	public void standardPoolChange(@RequestBody final PoolDetails poolDetails) {
 		log.info("rebuild standardPoolChange : {}", poolDetails.toString());
-		this.pool.shutdownNow();
-
-		this.pool = new MyThreadPoolExecutor(poolDetails.getCorePoolSize(), poolDetails.getMaximumPoolSize(),
-				poolDetails.getKeepAliveTime(), TimeUnit.SECONDS,
-				poolDetails.getWorkQueue() != 0
-						? new ArrayBlockingQueue<>(poolDetails.getWorkQueue())
-						: new LinkedBlockingQueue<>());
+		if (this.pool != null)
+			this.pool.shutdownNow();
+		this.pool = null;
 		try {
+
+			this.pool = new MyThreadPoolExecutor(poolDetails.getCorePoolSize(), poolDetails.getMaximumPoolSize(),
+					poolDetails.getKeepAliveTime(), TimeUnit.SECONDS, poolDetails.getWorkQueue());
 			this.afterPropertiesSet();
+
 		} catch (final Exception e) {
 			throw new RuntimeException(e);
 		}
-		this.getStatusPoolHandler().run();
 	}
 
 	// Handlers
@@ -106,7 +98,6 @@ public class PoolController implements InitializingBean {
 			this.messagingTemplate.progress(NotificationProgress.builder().name(task.getName()).type(
 					percentage >= 100D ? NotificationType.COMPLETED : NotificationProgress.NotificationType.IN_PROGRESS)
 					.progress(percentage).build());
-			this.getStatusPoolHandler().run();
 		};
 	}
 
@@ -114,7 +105,6 @@ public class PoolController implements InitializingBean {
 		return task -> {
 			this.messagingTemplate.progress(
 					NotificationProgress.builder().type(NotificationType.CANCELED).name(task.getName()).build());
-			this.getStatusPoolHandler().run();
 		};
 	}
 
@@ -122,19 +112,31 @@ public class PoolController implements InitializingBean {
 		return (task) -> {
 			this.messagingTemplate.progress(NotificationProgress.builder().name(task.getName())
 					.type(NotificationType.COMPLETED).progress(100D).build());
-			this.getStatusPoolHandler().run();
 		};
 	}
+
 	public Runnable getStatusPoolHandler() {
-		return () -> this.messagingTemplate.status(this.pool.details());
+		final PoolDetails fin = this.poolDetails;
+		return () -> {
+			final PoolDetails update = this.pool.details();
+			if (!update.equals(fin) || !this.start) {
+				this.start = true;
+				this.messagingTemplate.status(update);
+				this.poolDetails = update;
+			}
+		};
 	}
 
 	private Consumer<Task> getRejectedExecutionHandler() {
 		return (task) -> {
 			this.messagingTemplate.progress(
 					NotificationProgress.builder().type(NotificationType.REJECTED).name(task.getName()).build());
-			this.getStatusPoolHandler().run();
 		};
 	}
 
+	@Scheduled(fixedRate = 1000)
+	public void scheduledStatusPool() {
+		if (this.pool != null)
+			this.getStatusPoolHandler().run();
+	}
 }

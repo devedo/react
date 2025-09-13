@@ -1,11 +1,17 @@
 package com.example.react;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -13,29 +19,43 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
+@SuppressWarnings("unchecked")
 @Slf4j
 @Getter
 @Setter
 public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 
-	private Runnable statusPoolHandler;
 	private Consumer<Task> cancelledTaskHandler;
 	private Consumer<Task> doneTaskHandler;
 	private BiConsumer<Task, Double> progressTaskHandler;
-	private final List<Task> tasks = new ArrayList<>();
+	private Consumer<Task> otherRejectedTaskHandler;
+	private final Queue<Task> tasks = new ConcurrentLinkedQueue<>();
+	private final AtomicInteger rejectedTasks = new AtomicInteger();
 
-	public MyThreadPoolExecutor(final int corePoolSize, final int maximumPoolSize, final long keepAliveTime,
-			final TimeUnit unit, final BlockingQueue<Runnable> workQueue) {
-		super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue);
+	private static PoolDetails poolDetails = PoolDetails.builder().corePoolSize(1).maximumPoolSize(2).keepAliveTime(0)
+			.workQueue(1).build();
+
+	public MyThreadPoolExecutor(final int corePoolSize, final int maximumPoolSize, final Integer keepAliveTime,
+			final TimeUnit unit, final Integer workQueue) {
+		super(corePoolSize, maximumPoolSize, keepAliveTime, unit, createQueue(workQueue), createThreadFactory());
+		poolDetails = poolDetails.toBuilder().workQueue(workQueue < 1 ? null : workQueue).corePoolSize(corePoolSize)
+				.maximumPoolSize(maximumPoolSize).keepAliveTime(keepAliveTime).build();
 	}
 
-	public void setRejectedExecutionHandler(final Consumer<Task> rejectedTaskHandler) {
-		this.setRejectedExecutionHandler((r, poll) -> {
-			System.out.println("->>>>>>>>>>>>>>>>>>>>>>>>>>>>rejectedTaskHandler");
-			this.tasks.stream().filter(entry -> entry.getFuture().equals(r)).findAny().ifPresent(rejectedTaskHandler);
+	private static BlockingQueue<Runnable> createQueue(final Integer integer) {
+		if (integer > 0)
+			return new ArrayBlockingQueue<>(integer);
+		else if (integer == 0)
+			return new LinkedBlockingQueue<>();
+		else if (integer == -1)
+			return new SynchronousQueue<>();
 
-		});
+		throw new RuntimeException();
+	}
 
+	@Override
+	protected void beforeExecute(final Thread t, final Runnable r) {
+		super.beforeExecute(t, r);
 	}
 
 	@Override
@@ -48,7 +68,6 @@ public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 				this.getDoneTaskHandler().accept(entry);
 			this.tasks.remove(entry);
 		});
-		this.getStatusPoolHandler().run();
 	}
 
 	public void remove(final String name) {
@@ -58,10 +77,17 @@ public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 			this.getQueue().remove(task.getFuture());
 		});
 	}
+
 	public PoolDetails details() {
-		final PoolDetails build = PoolDetails.builder().corePoolSize(this.getCorePoolSize()) // número de hilos básicos
-																								// (core threads) que
-																								// mantiene el grupo.
+		return this.details(poolDetails);
+	}
+	public <T extends PoolDetails> T details(final T poolDetails) {
+		return (T) poolDetails.toBuilder().workQueue(poolDetails.getWorkQueue()).corePoolSize(this.getCorePoolSize()) // número
+																														// de
+																														// hilos
+																														// básicos
+				// (core threads) que
+				// mantiene el grupo.
 				.maximumPoolSize(this.getMaximumPoolSize())// tamaño máximo permitido del grupo de hilos.
 				.poolSize(this.getPoolSize()) // número actual de hilos en el grupo.
 				.activeCount(this.getActiveCount())// estimación aproximada del número de hilos que están ejecutando
@@ -75,32 +101,50 @@ public class MyThreadPoolExecutor extends ThreadPoolExecutor {
 				.isTerminating(this.isTerminating()) // true si el ejecutor está en proceso de apagarse pero no ha
 				// terminado completamente.
 				.isTerminated(this.isTerminated()) // true si el ejecutor ha terminado.
+				.rejected(this.rejectedTasks.get()) // true si el ejecutor ha terminado.
 				.build();
-
-		return build;
 	}
 
 	@Override
 	public void shutdown() {
 		super.shutdown();
-		this.getStatusPoolHandler().run();
 	}
 	@Override
 	protected void terminated() {
 		super.terminated();
-		this.getStatusPoolHandler().run();
 		log.info("terminated");
 	}
 	@Override
 	public List<Runnable> shutdownNow() {
 		final List<Runnable> runnables = super.shutdownNow();
-		this.getStatusPoolHandler().run();
 		return runnables;
 	}
 
 	public void submit(final Task task) {
 		log.info("submit : {}", task);
-		this.tasks.add(task.addFuture(super.submit(task)).setProgressTaskListener(this.progressTaskHandler));
+		task.setProgressTaskListener(this.progressTaskHandler);
+		try {
+			task.setFuture(super.submit(task));
+			this.tasks.add(task);
+		} catch (final Exception e) {
+			this.rejectedTasks.incrementAndGet();
+			this.getOtherRejectedTaskHandler().accept(task);
+		}
+	}
+	private static ThreadFactory createThreadFactory() {
+		return new ThreadFactory() {
+			private int threadCount = 1;
+
+			@Override
+			public Thread newThread(final Runnable r) {
+				final Thread t = new Thread(r);
+				t.setName("MyTheadPoolExecutor thread: " + this.threadCount++); // Nombre personalizado
+				t.setDaemon(false); // No es un hilo demonio
+				t.setPriority(Thread.NORM_PRIORITY); // Prioridad normal
+				System.out.println("Hilo creado: " + t.getName());
+				return t;
+			}
+		};
 	}
 
 }

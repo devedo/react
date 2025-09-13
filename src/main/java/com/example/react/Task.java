@@ -19,8 +19,6 @@ public class Task implements Runnable {
 	Future<?> future;
 	@ToString.Exclude
 	BiConsumer<Task, Double> progressTaskListener;
-	@ToString.Exclude
-	MySimpMessagingTemplate messagingTemplate;
 
 	public Task(final String name) {
 		this.name = name;
@@ -50,18 +48,9 @@ public class Task implements Runnable {
 		}
 	}
 
-	public Task addFuture(final Future<?> submit) {
-		this.future = submit;
-		return this;
-	}
-
 	private Double getPorcentage(final int i, final int cienPorciento) {
 		return BigDecimal.valueOf(i * 100L).divide(BigDecimal.valueOf(cienPorciento), 1, RoundingMode.HALF_DOWN)
 				.setScale(1, RoundingMode.HALF_DOWN).doubleValue();
 	}
 
-	public Task setProgressTaskListener(final BiConsumer<Task, Double> progressTaskListener) {
-		this.progressTaskListener = progressTaskListener;
-		return this;
-	}
 }

@@ -2,6 +2,7 @@ package com.example.react;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
@@ -10,6 +11,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder(toBuilder = true)
 @AllArgsConstructor
 @ToString
+@EqualsAndHashCode
 @NoArgsConstructor
 public class PoolDetails {
 	protected Integer maximumPoolSize;
@@ -21,6 +23,7 @@ public class PoolDetails {
 	protected Integer activeCount;
 	protected Integer poolSize;
 	protected Integer runingQueue;
+	protected Integer rejected;
 	protected Boolean isShutdown;
 	protected Boolean isTerminating;
 	protected Boolean isTerminated;
